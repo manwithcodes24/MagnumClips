@@ -1122,7 +1122,7 @@ export default function EditorPage() {
                       </div>
 
                       {/* Crop track status & Preview */}
-                      {(cropTrack || config.target_aspect_ratio !== "original") && (
+                      {(cropTrack || Boolean(ASPECT_MAP[config.target_aspect_ratio])) && (
                         <div className="bg-black/20 p-2.5 rounded-xl border border-[var(--color-border)]/50 flex flex-col flex-1 min-h-[0px]">
                           <div className="flex flex-wrap items-center justify-between gap-2 mb-2 flex-shrink-0">
                              <div className="flex items-center gap-3">

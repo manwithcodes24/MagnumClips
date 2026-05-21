@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/lib/store";
 import {
   analyzeVideo,
@@ -11,6 +11,14 @@ import {
 } from "@/lib/api";
 
 export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<AnalyzeLoading stage="Starting..." />}>
+      <AnalyzeContent />
+    </Suspense>
+  );
+}
+
+function AnalyzeContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { videoInfo, setClips } = useAppStore();
@@ -18,8 +26,8 @@ export default function AnalyzePage() {
   const [error, setError] = useState<string | null>(null);
   const started = useRef(false);
 
-  // Use videoId from URL param if available, otherwise from store
-  const videoId = searchParams.get("videoId") || videoInfo?.id;
+  const urlVideoId = searchParams.get("videoId");
+  const videoId = urlVideoId || videoInfo?.id;
 
   useEffect(() => {
     if (!videoId) {
@@ -27,10 +35,9 @@ export default function AnalyzePage() {
       return;
     }
 
-    // Only fire the analyze request once (skip if resuming an existing job)
     if (!started.current) {
       started.current = true;
-      if (!searchParams.get("videoId")) {
+      if (!urlVideoId) {
         analyzeVideo(videoId).catch(() => {});
       }
     }
@@ -43,9 +50,7 @@ export default function AnalyzePage() {
       router.push("/clips");
     };
 
-    // Try SSE first for real-time updates
-    const sseUrl = getAnalyzeStreamUrl(videoId);
-    const eventSource = new EventSource(sseUrl);
+    const eventSource = new EventSource(getAnalyzeStreamUrl(videoId));
     let sseConnected = false;
 
     eventSource.onmessage = (event) => {
@@ -68,7 +73,6 @@ export default function AnalyzePage() {
 
     eventSource.onerror = () => {
       eventSource.close();
-      // Fall back to polling if SSE fails
       if (!sseConnected) {
         pollInterval = setInterval(async () => {
           try {
@@ -94,35 +98,41 @@ export default function AnalyzePage() {
       if (pollInterval) clearInterval(pollInterval);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [videoId]);
+  }, [videoId, urlVideoId]);
 
+  if (error) {
+    return (
+      <main className="flex-1 flex flex-col items-center justify-center px-4">
+        <div className="text-center">
+          <div className="text-5xl mb-6">!</div>
+          <h1 className="text-2xl font-bold mb-2 text-red-400">
+            Analysis Failed
+          </h1>
+          <p className="text-[var(--color-muted)] text-lg mb-6">{error}</p>
+          <button
+            onClick={() => router.push("/config")}
+            className="px-6 py-3 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-lg font-medium transition-colors"
+          >
+            Back to Config
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  return <AnalyzeLoading stage={stage} />;
+}
+
+function AnalyzeLoading({ stage }: { stage: string }) {
   return (
     <main className="flex-1 flex flex-col items-center justify-center px-4">
       <div className="text-center">
-        {error ? (
-          <>
-            <div className="text-5xl mb-6">⚠️</div>
-            <h1 className="text-2xl font-bold mb-2 text-red-400">
-              Analysis Failed
-            </h1>
-            <p className="text-[var(--color-muted)] text-lg mb-6">{error}</p>
-            <button
-              onClick={() => router.push("/config")}
-              className="px-6 py-3 bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white rounded-lg font-medium transition-colors"
-            >
-              Back to Config
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="w-16 h-16 border-4 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-8" />
-            <h1 className="text-2xl font-bold mb-2">Analyzing Video</h1>
-            <p className="text-[var(--color-muted)] text-lg">{stage}</p>
-            <p className="text-[var(--color-muted)] text-sm mt-4">
-              This may take a few minutes depending on video length
-            </p>
-          </>
-        )}
+        <div className="w-16 h-16 border-4 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto mb-8" />
+        <h1 className="text-2xl font-bold mb-2">Analyzing Video</h1>
+        <p className="text-[var(--color-muted)] text-lg">{stage}</p>
+        <p className="text-[var(--color-muted)] text-sm mt-4">
+          This may take a few minutes depending on video length
+        </p>
       </div>
     </main>
   );
