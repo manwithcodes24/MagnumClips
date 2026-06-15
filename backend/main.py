@@ -15,16 +15,25 @@ from routers.explainer import router as explainer_router
 from database import init_db
 
 STORAGE_DIR = Path(os.getenv("STORAGE_DIR", "./storage"))
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "https://magnumclips.upscaledu-admin.in",
+]
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", ",".join(DEFAULT_CORS_ORIGINS)).split(",")
+    if origin.strip()
+]
 
 app = FastAPI(title="MagnumClips API", version="1.0.0")
 
 # Create DB tables on startup
 init_db()
 
-# CORS for local dev
+# CORS for local and deployed frontend origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
