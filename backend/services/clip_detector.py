@@ -9,7 +9,7 @@ client = None
 def _get_client() -> genai.Client:
     global client
     if client is None:
-        client = genai.Client(api_key=os.getenv("GOOGLE_AI_API_KEY"))
+        client = genai.Client(api_key=os.getenv("GOOGLE_AI_API_KEY") or os.getenv("GEMINI_API_KEY"))
     return client
 
 
