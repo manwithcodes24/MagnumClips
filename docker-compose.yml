@@ -22,6 +22,8 @@ services:
       retries: 10
       start_period: 10s
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   supabase-auth:
     image: supabase/gotrue:v2.143.0
@@ -48,6 +50,8 @@ services:
       supabase-db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   supabase-rest:
     image: postgrest/postgrest:v12.2.3
@@ -63,6 +67,8 @@ services:
       supabase-db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   supabase-kong:
     image: kong:2.8.1
@@ -81,6 +87,8 @@ services:
       - supabase-auth
       - supabase-rest
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   supabase-meta:
     image: supabase/postgres-meta:v0.84.2
@@ -95,6 +103,8 @@ services:
       supabase-db:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   supabase-studio:
     image: supabase/studio:20241202-71e5240
@@ -118,6 +128,8 @@ services:
       - supabase-kong
       - supabase-meta
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   # ──────────────────── Application Services ────────────────────
 
@@ -133,6 +145,8 @@ services:
       timeout: 3s
       retries: 5
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   backend:
     build: ./backend
@@ -155,6 +169,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   worker:
     build: ./backend
@@ -172,6 +188,8 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - magnum_network
 
   frontend:
     build:
@@ -190,8 +208,17 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
+    networks:
+      - magnum_network
 
 volumes:
   supabase_db_data:
   redis_data:
   backend_storage:
+
+# ──────────────────── Custom Network Setup ────────────────────
+networks:
+  magnum_network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1442"
