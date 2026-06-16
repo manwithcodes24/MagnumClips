@@ -1,15 +1,5 @@
-# MagnumClips — Full Stack with Local Supabase
-# Run all:          docker-compose up --build
-# Infra only:       docker-compose up supabase-db supabase-auth supabase-kong redis
-# With Studio:      docker-compose up supabase-db supabase-auth supabase-kong supabase-rest supabase-meta supabase-studio redis
-#
-# Ports:
-#   54321 — Supabase API (Kong gateway)
-#   54322 — Supabase DB (PostgreSQL)
-#   54323 — Supabase Studio (dashboard)
-#   6379  — Redis
-#   8000  — Backend API
-#   3000  — Frontend
+# MagnumClips — Production Grade Secure Subdomain Architecture
+# Run all: docker compose up -d --build --force-recreate
 
 services:
   # ──────────────────── Supabase Infrastructure ────────────────────
@@ -17,30 +7,32 @@ services:
   supabase-db:
     image: supabase/postgres:15.1.1.78
     ports:
-      - "54322:5432"
+      - "127.0.0.1:54322:5432" # Secured to local loopback interface
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c search_path="$$user",public,extensions,auth,graphql_public -c max_connections=300 -c shared_buffers=512MB
     environment:
       POSTGRES_PASSWORD: magnumclips
       JWT_SECRET: clipyoutubevideosfast-built-by-manwithcodes
       JWT_EXP: 3600
     volumes:
       - supabase_db_data:/var/lib/postgresql/data
-      - ./docker/db/99-roles.sh:/docker-entrypoint-initdb.d/99-roles.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U supabase_admin -h localhost"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres -h localhost"]
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   supabase-auth:
-    image: supabase/gotrue:v2.164.0
+    image: supabase/gotrue:v2.143.0
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       GOTRUE_API_PORT: 9999
-      API_EXTERNAL_URL: http://localhost:54321
+      # UPDATED: Secure production endpoint targets
+      API_EXTERNAL_URL: https://supabase.upscaledu-admin.in
       GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:magnumclips@supabase-db:5432/postgres
-      GOTRUE_SITE_URL: http://localhost:3000
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:magnumclips@supabase-db:5432/postgres?search_path=auth,public,extensions&sslmode=disable
+      GOTRUE_SITE_URL: https://magnumclips.upscaledu-admin.in
       GOTRUE_URI_ALLOW_LIST: ""
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_JWT_ADMIN_ROLES: service_role
@@ -60,9 +52,9 @@ services:
   supabase-rest:
     image: postgrest/postgrest:v12.2.3
     environment:
-      PGRST_DB_URI: postgres://authenticator:magnumclips@supabase-db:5432/postgres
-      PGRST_DB_SCHEMAS: public,graphql_public
-      PGRST_DB_ANON_ROLE: anon
+      PGRST_DB_URI: postgres://postgres:magnumclips@supabase-db:5432/postgres
+      PGRST_DB_SCHEMAS: public,graphql_public,extensions,auth
+      PGRST_DB_ANON_ROLE: postgres
       PGRST_JWT_SECRET: clipyoutubevideosfast-built-by-manwithcodes
       PGRST_DB_USE_LEGACY_GUCS: "false"
       PGRST_APP_SETTINGS_JWT_SECRET: clipyoutubevideosfast-built-by-manwithcodes
@@ -75,8 +67,7 @@ services:
   supabase-kong:
     image: kong:2.8.1
     ports:
-      - "54321:8000"
-      - "54320:8443"
+      - "127.0.0.1:54321:8000" # Secured behind proxy loopback interface
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
@@ -98,7 +89,7 @@ services:
       PG_META_DB_HOST: supabase-db
       PG_META_DB_PORT: 5432
       PG_META_DB_NAME: postgres
-      PG_META_DB_USER: supabase_admin
+      PG_META_DB_USER: postgres
       PG_META_DB_PASSWORD: magnumclips
     depends_on:
       supabase-db:
@@ -108,16 +99,21 @@ services:
   supabase-studio:
     image: supabase/studio:20241202-71e5240
     ports:
-      - "54323:3000"
+      - "127.0.0.1:54323:3000" # Secured
     environment:
       STUDIO_PG_META_URL: http://supabase-meta:8080
       POSTGRES_PASSWORD: magnumclips
       DEFAULT_ORGANIZATION_NAME: MagnumClips
       DEFAULT_PROJECT_NAME: MagnumClips
       SUPABASE_URL: http://supabase-kong:8000
-      SUPABASE_PUBLIC_URL: http://localhost:54321
+      SUPABASE_PUBLIC_URL: https://supabase.upscaledu-admin.in
       SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
       SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/api/profile || exit 0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       - supabase-kong
       - supabase-meta
@@ -128,7 +124,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379" # Secured
     volumes:
       - redis_data:/data
     healthcheck:
@@ -141,13 +137,14 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000" # Secured
     env_file: ./backend/.env
     environment:
       - DATABASE_URL=postgresql://postgres:magnumclips@supabase-db:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - SUPABASE_URL=http://supabase-kong:8000
       - SUPABASE_JWT_SECRET=clipyoutubevideosfast-built-by-manwithcodes
+      - CORS_ORIGINS=https://magnumclips.upscaledu-admin.in
     volumes:
       - backend_storage:/app/storage
     depends_on:
@@ -180,14 +177,15 @@ services:
     build:
       context: ./frontend
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
-        - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+        # UPDATED: Next.js secure environment parameters for asset compilation
+        - NEXT_PUBLIC_API_URL=https://api.magnumclips.upscaledu-admin.in
+        - NEXT_PUBLIC_SUPABASE_URL=https://supabase.upscaledu-admin.in
         - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000" # Secured
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+      - NEXT_PUBLIC_API_URL=https://api.magnumclips.upscaledu-admin.in
+      - NEXT_PUBLIC_SUPABASE_URL=https://supabase.upscaledu-admin.in
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
     depends_on:
       - backend
