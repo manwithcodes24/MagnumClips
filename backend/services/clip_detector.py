@@ -4,6 +4,8 @@ from google import genai
 
 
 client = None
+GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-3-flash-preview")
+LEGACY_FLASH_MODELS = {"gemini-2.5-flash", "models/gemini-2.5-flash"}
 
 
 def _get_client() -> genai.Client:
@@ -59,7 +61,7 @@ Sort by engagement_score descending (best first).
 JSON:"""
 
     response = c.models.generate_content(
-        model=model_name,
+        model=_resolve_model_name(model_name),
         contents=prompt,
     )
 
@@ -97,3 +99,8 @@ def _fmt_time(seconds: float) -> str:
     m = int(seconds // 60)
     s = int(seconds % 60)
     return f"{m:02d}:{s:02d}"
+
+
+def _resolve_model_name(model_name: str) -> str:
+    """Use the production default when old Gemini Flash IDs are passed in."""
+    return GEMINI_DEFAULT_MODEL if model_name in LEGACY_FLASH_MODELS else model_name

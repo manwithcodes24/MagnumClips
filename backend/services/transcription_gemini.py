@@ -4,6 +4,8 @@ from google import genai
 
 
 client = None
+GEMINI_DEFAULT_MODEL = os.getenv("GEMINI_DEFAULT_MODEL", "gemini-3-flash-preview")
+LEGACY_FLASH_MODELS = {"gemini-2.5-flash", "models/gemini-2.5-flash"}
 
 
 def _get_client() -> genai.Client:
@@ -46,7 +48,7 @@ Rules:
 - Return ONLY valid JSON, no other text"""
 
     response = c.models.generate_content(
-        model=model_name,
+        model=_resolve_model_name(model_name),
         contents=[
             {
                 "parts": [
@@ -79,3 +81,8 @@ Rules:
         "segments": result.get("segments", []),
         "words": result.get("words", []),
     }
+
+
+def _resolve_model_name(model_name: str) -> str:
+    """Use the production default when old Gemini Flash IDs are passed in."""
+    return GEMINI_DEFAULT_MODEL if model_name in LEGACY_FLASH_MODELS else model_name
